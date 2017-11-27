@@ -1,5 +1,11 @@
 ### KValid
 
+<p align="center">
+	<img align="center" src="https://i.imgur.com/pawYbDU.png" alt="Silhouette-Index in IRIS dataset">
+	<br>
+	<i>Silhouette-Index in IRIS dataset</i>
+</p>
+
 KValid is a simple clustering evaluation package for [WEKA](http://www.cs.waikato.ac.nz/ml/weka/). It uses the
 SimpleKMeans algorithm as a backend to cluster the instances and evaluates
 the clusterer using some algorithms, currently only Silhouette-Index.
