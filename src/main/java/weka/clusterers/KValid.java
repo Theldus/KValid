@@ -62,8 +62,8 @@ import weka.filters.unsupervised.attribute.ReplaceMissingValues;
  * <!-- globalinfo-start --> KValid: SimpleKMeans with validation.
  * For more information, see<br/>
  * <br/>
- * Davidson Francis (2017). <a href="http://github.com/Theldus/Weka">
- * https://github.com/Theldus/Weka/</a>
+ * Davidson Francis (2017). <a href="http://github.com/Theldus/KValid">
+ * https://github.com/Theldus/KValid/</a>
  * <p/>
  * <!-- globalinfo-end -->
  * 
@@ -106,24 +106,28 @@ public class KValid extends RandomizableClusterer implements
     /** Validation method to use. */
     protected int m_validationMethod = SILHOUETTE_INDEX;
 
-	/** Initialization methods */
-	public static final Tag[] INIT_SELECTION = { new Tag(RANDOM, "Random"),
-    	new Tag(KMEANS_PLUS_PLUS, "k-means++"), new Tag(CANOPY, "Canopy"),
-		new Tag(FARTHEST_FIRST, "Farthest first") };
-
 	/** Validation attributes. */
 	public static final Tag[] VALIDATION_SELECTION = {
 		new Tag(SILHOUETTE_INDEX, "Silhouette Index"),
 		new Tag(DAVIES_BOULDIN, "Davies-Bouldin Index") };
 
 	/** The initialization method to use */
-	protected int m_initializationMethod = RANDOM;
+	protected int m_initializationMethod = weka.clusterers.SimpleKMeans.RANDOM;
 
 	/** Attributes Silhouette?. */
 	protected boolean m_attributesSilhouette = false;
 
 	/** My instances. */
 	protected Instances m_instances = null;
+
+	/** Minimal k. */
+	protected int m_minimalK = 3;
+
+	/** Maximum k. */
+	protected int m_maximalK = 10;
+
+	/** Cascade. */
+	protected boolean m_cascade = false;
 
 	/** Instances SI. */
 	protected ArrayList<Double> m_instancesSilhouette = new ArrayList<Double>();
@@ -150,7 +154,7 @@ public class KValid extends RandomizableClusterer implements
 	public String globalInfo() {
 
 		return "KValid: SimpleKMeans with cluster validation. More "
-				+ "information, visit https://github.com/Theldus/Weka";
+				+ "information, visit https://github.com/Theldus/KValid";
 	}
 
 	/**
@@ -186,7 +190,7 @@ public class KValid extends RandomizableClusterer implements
 
 		/* Setup the configs. */
 		m_skmeans.setInitializationMethod(new SelectedTag(m_initializationMethod,
-			INIT_SELECTION));
+			weka.clusterers.SimpleKMeans.TAGS_SELECTION));
 
 		/* Num clusters. */
 		m_skmeans.setNumClusters(m_numClusters);
@@ -370,7 +374,8 @@ public class KValid extends RandomizableClusterer implements
 	 * @return method the initialization method to use
 	 */
 	public SelectedTag getInitializationMethod() {
-		return new SelectedTag(m_initializationMethod, INIT_SELECTION);
+		return new SelectedTag(m_initializationMethod,
+			weka.clusterers.SimpleKMeans.TAGS_SELECTION);
 	}
 
 	/**
@@ -379,7 +384,7 @@ public class KValid extends RandomizableClusterer implements
 	 * @param method the initialization method to use
 	 */
 	public void setInitializationMethod(SelectedTag method) {
-		if (method.getTags() == INIT_SELECTION) {
+		if (method.getTags() == weka.clusterers.SimpleKMeans.TAGS_SELECTION) {
 			m_initializationMethod = method.getSelectedTag().getID();
 		}
 	}
@@ -498,7 +503,7 @@ public class KValid extends RandomizableClusterer implements
 	}
 
 	/**
-	 * returns the distance function currently in use.
+	 * Returns the distance function currently in use.
 	 * 
 	 * @return the distance function
 	 */
@@ -518,6 +523,99 @@ public class KValid extends RandomizableClusterer implements
 				"KValid currently only supports the Euclidean and Manhattan distances."); 
 		}
 		m_distanceFunction = df;
+	}
+
+	/**
+	 * Returns the tip text for this property.
+	 * 
+	 * @return tip text for this property suitable for displaying in the
+	 *         explorer/experimenter gui
+	 */
+	public String minimalKTipText() {
+		return "The minimal K value for test when cascade option is enabled";
+	}
+
+	/**
+	 * Returns the minimal K value when cascade k-means enabled.
+	 *
+	 * @return the minimal k value for test.
+	 */
+	public int getMinimalK() {
+		return m_minimalK;
+	}
+
+	/**
+	 * Sets the minimal K value. 
+	 *
+	 * @param minimalK Minimal K value.
+	 */
+	public void setMinimalK(int minimalK) throws Exception { 
+
+		if (minimalK < 1 || minimalK >= m_maximalK)
+			throw new Exception("minimalK should be >= 2 and lesser than maximalK");
+
+		m_minimalK = minimalK;
+	}
+
+	/**
+	 * Returns the tip text for this property.
+	 * 
+	 * @return tip text for this property suitable for displaying in the
+	 *         explorer/experimenter gui
+	 */
+	public String maximalKTipText() {
+		return "The maximal K value for test when cascade option is enabled";
+	}
+
+	/**
+	 * Returns the maximal K value when cascade k-means enabled.
+	 *
+	 * @return the maximal k value for test.
+	 */
+	public int getMaximalK() {
+		return m_maximalK;
+	}
+
+	/**
+	 * Sets the maximal K value. 
+	 *
+	 * @param maximalK Minimal K value.
+	 */
+	public void setMaximalK(int maximalK) throws Exception { 
+
+		if (maximalK < 1 || maximalK <= m_minimalK)
+			throw new Exception("maximalK should be >= 2 and greater than minimalK");
+
+		m_maximalK = maximalK;
+	}
+
+	/**
+	 * Returns the tip text for this property.
+	 * 
+	 * @return tip text for this property suitable for displaying in the
+	 *         explorer/experimenter gui
+	 */
+	public String cascadeTipText() {
+		return "Cascade test: Tries to find the best K given a minimum/maximum value!";
+	}
+
+	/**
+	 * Returns the cascade option selected.
+	 *
+	 * @return true if the cascade option is enabled, false otherwise.
+	 */
+	public boolean getCascade() {
+		return m_cascade;
+	}
+
+	/**
+	 * Enables/Disables the cascade option, i.e: attemp to find
+	 * the best K.
+	 *
+	 * @param maximalK Minimal K value.
+	 */
+	public void setCascade(boolean cascade) {
+		m_cascade = cascade;
 	}
 
 	/**
@@ -579,6 +677,17 @@ public class KValid extends RandomizableClusterer implements
 		if (m_attributesSilhouette)
 			result.add("-attribute-si");
 
+		if (m_cascade) {
+
+			result.add("-cascade");
+
+			result.add("-minK");
+			result.add("" + getMinimalK());
+
+			result.add("-maxK");
+			result.add("" + getMaximalK());
+		}
+
 		Collections.addAll(result, super.getOptions());
 
 		return result.toArray(new String[result.size()]);
@@ -597,7 +706,7 @@ public class KValid extends RandomizableClusterer implements
 		temp = Utils.getOption("init", options);
 		if (temp.length() > 0)
 			setInitializationMethod(new SelectedTag(Integer.parseInt(temp),
-				INIT_SELECTION));
+				weka.clusterers.SimpleKMeans.TAGS_SELECTION));
 
 		/* Num cluster. */
 		temp = Utils.getOption("N", options);
@@ -634,6 +743,18 @@ public class KValid extends RandomizableClusterer implements
 
 		/* Shows or not the silhouette for each point. */
 		m_attributesSilhouette = Utils.getFlag("attribute-si", options);
+
+		/* Tries to find the best K or not. */
+		if ( (m_cascade = Utils.getFlag("cascade", options)) == true ) {
+			
+			temp = Utils.getOption("minK", options);
+			if (temp.length() > 0)
+				setMinimalK(Integer.parseInt(temp));
+
+			temp = Utils.getOption("maxK", options);
+			if (temp.length() > 0)
+				setMaximalK(Integer.parseInt(temp));
+		}
 
 		super.setOptions(options);
 		Utils.checkForRemainingOptions(options);
