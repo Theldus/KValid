@@ -114,9 +114,6 @@ public class KValid extends RandomizableClusterer implements
 	/** The initialization method to use */
 	protected int m_initializationMethod = weka.clusterers.SimpleKMeans.RANDOM;
 
-	/** Attributes Silhouette?. */
-	protected boolean m_attributesSilhouette = false;
-
 	/** My instances. */
 	protected Instances m_instances = null;
 
@@ -128,9 +125,6 @@ public class KValid extends RandomizableClusterer implements
 
 	/** Cascade. */
 	protected boolean m_cascade = false;
-
-	/** Instances SI. */
-	protected ArrayList<Double> m_instancesSilhouette = new ArrayList<Double>();
 
 	/** Clusters SI. */
 	protected ArrayList<Double> m_clustersSilhouette = new ArrayList<Double>();
@@ -327,16 +321,17 @@ public class KValid extends RandomizableClusterer implements
 				pointSilhouetteIndex = (meanDistOtherC - meanDistSameC) / 
 					Math.max( meanDistSameC, meanDistOtherC );
 
-				/* Adds the index into my list. */
-				m_instancesSilhouette.add( pointSilhouetteIndex );
-
 				/* Sum to the centroid silhouette. */
 				centroidSilhouetteIndex += pointSilhouetteIndex;
 			}
 
 			centroidSilhouetteIndex /= (clusteredInstances[i].size() - 1);
+			m_globalSilhouette += centroidSilhouetteIndex;
+
 			m_clustersSilhouette.add( centroidSilhouetteIndex );
 		}
+
+		m_globalSilhouette /= m_clustersSilhouette.size();
 	}
 
 	/**
@@ -619,36 +614,6 @@ public class KValid extends RandomizableClusterer implements
 	}
 
 	/**
-	 * Returns the tip text for this property.
-	 * 
-	 * @return tip text for this property suitable for displaying in the
-	 *         explorer/experimenter gui
-	 */
-	public String attributesSilhouetteTipText() {
-		return "Shows the SI for each attribute";
-	}
-
-	/**
-	 * Gets the attributes silhouette, i.e: if shows or not the SI
-	 * for each attribute.
-	 *
-	 * @return Returns the attribute silhouette.
-	 */
-	public boolean getAttributesSilhouette() {
-		return m_attributesSilhouette;
-	}
-
-	/**
-	 * Sets the attributes silhouette.
-	 *
-	 * @param option enables or disables the show of
-	 * attribute silhouette.
-	 */
-	public void setAttributesSilhouette(boolean option) {
-		m_attributesSilhouette = option;
-	}
-
-	/**
 	 * Gets the current settings of KValid.
 	 * 
 	 * @return An array of strings suitable for passing to setOptions()
@@ -673,9 +638,6 @@ public class KValid extends RandomizableClusterer implements
 
 		result.add("-validation");
 		result.add("" + getValidationMethod().getSelectedTag().getID());
-
-		if (m_attributesSilhouette)
-			result.add("-attribute-si");
 
 		if (m_cascade) {
 
@@ -741,9 +703,6 @@ public class KValid extends RandomizableClusterer implements
 			setValidationMethod(new SelectedTag(Integer.parseInt(temp),
 				VALIDATION_SELECTION));
 
-		/* Shows or not the silhouette for each point. */
-		m_attributesSilhouette = Utils.getFlag("attribute-si", options);
-
 		/* Tries to find the best K or not. */
 		if ( (m_cascade = Utils.getFlag("cascade", options)) == true ) {
 			
@@ -779,32 +738,17 @@ public class KValid extends RandomizableClusterer implements
 
 		if (m_validationMethod == SILHOUETTE_INDEX) {
 
-			/* We have to show the SI for each attribute?. */
-			if (m_attributesSilhouette) {
-				for (int i = 0; i < m_instancesSilhouette.size(); i++) {
-					double si = m_instancesSilhouette.get(i);
-					description.append("Instance " + m_instances.get(i).toString() + " : " + 
-						String.format(Locale.US, "%.4f", si) + "\n");
-				}
-			}
-
 			description.append("\n\n");
 
 			/* Clusters. */
-			double meanSI = 0.0;
 			for (int i = 0; i < m_clustersSilhouette.size(); i++) {
 				double si = m_clustersSilhouette.get(i);
-				meanSI += si;
 				description.append("Cluster " + i + ": " + String.format(Locale.US, "%.4f", si)
 					+ ", veredict: " + evalSilhouette(si) + "\n");
 			}
 
-			/* Global silhouette. */
-			meanSI /= m_clustersSilhouette.size();
-
-			description.append("\n\nMean: " + String.format(Locale.US, "%.4f", meanSI)
-				+ ", veredict: " + evalSilhouette(meanSI));
-		
+			description.append("\n\nMean: " + String.format(Locale.US, "%.4f", m_globalSilhouette)
+				+ ", veredict: " + evalSilhouette(m_globalSilhouette));
 		}
 		
 		description.append("\n\n");
