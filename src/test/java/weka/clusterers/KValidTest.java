@@ -39,7 +39,7 @@ public class KValidTest
 		super(name);  
 	}
 
-	/** Creates a default SimpleKMeans */
+	/** Creates a KValid instance */
 	public Clusterer getClusterer() {
 		return new KValid();
 	}
