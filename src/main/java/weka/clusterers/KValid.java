@@ -418,7 +418,7 @@ public class KValid extends RandomizableClusterer implements
 	 * Sets the maximum number of iterations.
 	 *
 	 * @param m maximum iterations.
-	 * @throws Exception if the maximum number of iterations if < 1.
+	 * @throws Exception if the maximum number of iterations is < 1.
 	 */
 	public void setMaxIterations(int m) throws Exception {
 		if (m < 1)

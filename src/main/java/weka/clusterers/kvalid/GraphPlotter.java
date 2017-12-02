@@ -61,6 +61,17 @@ public class GraphPlotter extends ApplicationFrame implements Serializable {
 		super(windowTitle);
 	}
 
+	/**
+	 * Plots a line chart for cascade mode given the following
+	 * parameters.
+	 *
+	 * @param dataSet  Y value point to be plotted.
+	 * @param startK   When in cascade mode, defines the initial K.
+	 * @param title    Graph title.
+	 * @param subTitle Graph subtitle.
+	 * @param xLabel   Graph X label.
+	 * @param yLabel   Graph Y label.
+	 */
 	public void plot(ArrayList<Double> dataSet, int startK, String title,
 		String subTitle, String xLabel, String yLabel) {
 
