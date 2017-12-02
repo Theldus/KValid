@@ -41,6 +41,9 @@ import weka.clusterers.AbstractClusterer;
  */
 public class SilhouetteIndex implements Serializable, ClusterEvaluator {
 
+	/** Serialization */
+	static final long serialVersionUID = -305533168492651330L;
+
 	/** Clusters SI. */
 	protected ArrayList<Double> m_clustersSilhouette;
 

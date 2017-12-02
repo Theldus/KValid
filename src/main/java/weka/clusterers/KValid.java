@@ -69,11 +69,7 @@ import weka.clusterers.kvalid.GraphPlotter;
  * https://github.com/Theldus/KValid/</a>
  * <p/>
  * <!-- globalinfo-end -->
- * 
- * <!-- options-start --> Valid options are:
- * <p/>
- * 
- * <!-- options-end -->
+ *
  * 
  * @author Davidson Francis (davidson.francis@sga.pucminas.br)
  * @version $Revision: 0001 $
@@ -81,8 +77,8 @@ import weka.clusterers.kvalid.GraphPlotter;
 public class KValid extends RandomizableClusterer implements
   NumberOfClustersRequestable, WeightedInstancesHandler {
 
-	/** for serialization */
-	static final long serialVersionUID = -217733168493644444L;
+	/** Serialization */
+	static final long serialVersionUID = -206633168493633341L;
 
 	/** SimpleKMeans */
 	protected SimpleKMeans m_skmeans;
@@ -104,7 +100,7 @@ public class KValid extends RandomizableClusterer implements
 	
 	/** Validation attributes. */
 	public static final int SILHOUETTE_INDEX = 0;
-	public static final int DAVIES_BOULDIN   = 1;
+	public static final int ELBOW_METHOD     = 1;
 
     /** Validation method to use. */
     protected int m_validationMethod = SILHOUETTE_INDEX;
@@ -112,7 +108,7 @@ public class KValid extends RandomizableClusterer implements
 	/** Validation attributes. */
 	public static final Tag[] VALIDATION_SELECTION = {
 		new Tag(SILHOUETTE_INDEX, "Silhouette Index"),
-		new Tag(DAVIES_BOULDIN, "Davies-Bouldin Index") };
+		new Tag(ELBOW_METHOD, "Elbow method") };
 
 	/** The initialization method to use */
 	protected int m_initializationMethod = weka.clusterers.SimpleKMeans.RANDOM;
@@ -131,6 +127,9 @@ public class KValid extends RandomizableClusterer implements
 
 	/** SilhouetteIndex. */
 	protected ArrayList<SilhouetteIndex> m_silhouetteIdx;
+
+	/** Elbow. */
+	protected ArrayList<Double> m_elbow;
 
 	/** Best K. */
 	protected int m_bestK = 0;
@@ -200,6 +199,7 @@ public class KValid extends RandomizableClusterer implements
 		}
 
 		m_silhouetteIdx = new ArrayList<SilhouetteIndex>();
+		m_elbow = new ArrayList<Double>();
 
 		/* Cascade k-Means. */
 		for (int i = start; i <= end; i++) {
@@ -233,16 +233,29 @@ public class KValid extends RandomizableClusterer implements
 				m_silhouetteIdx.get(i - start).evaluate(m_skmeans, m_skmeans.getClusterCentroids(),
 					m_instances, m_distanceFunction);
 			}
+			else if (m_validationMethod == ELBOW_METHOD) {
+
+				m_elbow.add( m_skmeans.getSquaredError() );
+			}
 		}
 
 		/* Gets the 'best' K if cascade enable. */
 		if (m_cascade == true) {
-			double si = 0;
 			
 			if (m_validationMethod == SILHOUETTE_INDEX) {
+				double si = 0;
 				for (int i = 0; i < m_silhouetteIdx.size(); i++) {
 					if (m_silhouetteIdx.get(i).getGlobalSilhouette() > si) {
 						si  = m_silhouetteIdx.get(i).getGlobalSilhouette();
+						m_bestK = i;
+					}
+				}
+			}
+			else if (m_validationMethod == ELBOW_METHOD) {
+				double elb = 0.0;
+				for (int i = 0; i < m_elbow.size(); i++) {
+					if (m_elbow.get(i) > elb) {
+						elb = m_elbow.get(i);
 						m_bestK = i;
 					}
 				}
@@ -317,7 +330,7 @@ public class KValid extends RandomizableClusterer implements
 	 * @return Property tip text.
 	 */
 	public String validationMethodTipText() {
-		return "Which validation method: Silhouette Index or Davies-Bouldin Index";
+		return "Which validation method: Silhouette Index or Elbow method";
 	}
 
 	/**
@@ -687,18 +700,19 @@ public class KValid extends RandomizableClusterer implements
 
 		description.append("=== Clustering validation, using: " +
 			((m_validationMethod == SILHOUETTE_INDEX) ? "Silhouette Index"
-			: "Davies-Bouldin Index") + " ===");
+			: "Elbow method (SSE)") + " ===");
+
+		int start   = m_numClusters;
+		int end     = m_numClusters;
+
+		if (m_cascade == true) {
+			start = m_minimumK;
+			end   = m_maximumK;
+		}
+
+		description.append("\n");
 
 		if (m_validationMethod == SILHOUETTE_INDEX) {
-			int start   = m_numClusters;
-			int end     = m_numClusters;
-
-			if (m_cascade == true) {
-				start = m_minimumK;
-				end   = m_maximumK;
-			}
-
-			description.append("\n");
 
 			for (int i = start; i <= end; i++) {
 				description.append("\nFor k = " + i + "\n");
@@ -723,6 +737,33 @@ public class KValid extends RandomizableClusterer implements
 						"k - value", "Silhouette Index");
 				}
 			}
+		}
+		else if (m_validationMethod == ELBOW_METHOD) {
+
+			for (int i = start; i <= end; i++) {
+				description.append("\nFor k = " + i + "\n");
+				description.append("SSE: " + m_elbow.get(i - start) + "\n");
+			}
+
+			if (m_cascade == true) {
+			
+				/* Show the graph. */
+				ArrayList<Double> dataSet = new ArrayList<Double>();
+				for (int i = 0; i < m_elbow.size(); i++)
+					dataSet.add( m_elbow.get(i) );
+
+				/* Show the graph if needed. */
+				if (m_showGraph == true) {
+					GraphPlotter gp = new GraphPlotter("KValid - Elbow method");
+					gp.plot(dataSet, m_minimumK, "Elbow analysis for KMeans",
+						"for k ranging between " + m_minimumK + " and " + m_maximumK,
+						"k - value", "Elbow (SSE)");
+				}
+				else {
+					description.append(
+					"\nPlease enable the showGraph option to visually figure out the best K");
+				}
+			}			
 		}
 		
 		description.append("\n\n");

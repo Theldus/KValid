@@ -53,6 +53,9 @@ import org.jfree.ui.RefineryUtilities;
  */
 public class GraphPlotter extends ApplicationFrame implements Serializable {
 
+	/** Serialization */
+	static final long serialVersionUID = -401133168492661320L;
+
 	/** Default constructor. */
 	public GraphPlotter(String windowTitle){
 		super(windowTitle);
