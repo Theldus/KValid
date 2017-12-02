@@ -4,18 +4,19 @@ A simple clustering evaluation of KMeans for the Weka
 -----------------
 
 <p align="center">
-	<img align="center" src="https://i.imgur.com/pawYbDU.png" alt="Silhouette-Index in IRIS dataset">
+	<img align="center" src="https://i.imgur.com/4IK452f.png" alt="Silhouette-Index in IRIS dataset">
 	<br>
 	<i>Silhouette-Index in IRIS dataset</i>
 </p>
 
 ### What is KValid?
 
-KValid is a simple clustering evaluation package for [WEKA](http://www.cs.waikato.ac.nz/ml/weka/). It uses the
-SimpleKMeans algorithm as a backend to cluster the instances and evaluates
-the clusterer using some algorithms, currently only Silhouette-Index.
+KValid is a simple clustering evaluation package for [WEKA](http://www.cs.waikato.ac.nz/ml/weka/).
+It uses the SimpleKMeans algorithm as a backend to cluster the instances and evaluates
+the clusterer using some algorithms, currently Silhouette-Index and Elbow.
 
-Note that the package does not tell you which is the best K but only output of the metric,
-which can give you a clue to which is the best K. Also, keep in mind that these metrics
-can sometimes induce an incorrect K, therefore, it is important to manually review your
-dataset to get some better information.
+### Funcionalities
+
+KValid uses Silhouette-Index and Elbow to validate the SimpleKMeans algorithm. Besides calculating
+the SI and SSE, the package tell which is the best K and allows plot the graph into the screen and
+save as PNG format.
