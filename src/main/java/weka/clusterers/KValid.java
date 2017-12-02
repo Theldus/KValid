@@ -59,6 +59,7 @@ import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.ReplaceMissingValues;
 
 import weka.clusterers.kvalid.SilhouetteIndex;
+import weka.clusterers.kvalid.GraphPlotter;
 
 /**
  * <!-- globalinfo-start --> KValid: SimpleKMeans with validation.
@@ -134,6 +135,9 @@ public class KValid extends RandomizableClusterer implements
 	/** Best K. */
 	protected int m_bestK = 0;
 
+	/** Show graph?. */
+	protected boolean m_showGraph = false;
+
 	/** Default constructor. */
 	public KValid() {
 		super();
@@ -191,8 +195,8 @@ public class KValid extends RandomizableClusterer implements
 				throw new Exception
 					("Wrong minimum/maximum values, minimum should be >= 2 and maximum >= 3");
 			
-			start = m_maximumK;
-			end   = m_minimumK;
+			start = m_minimumK;
+			end   = m_maximumK;
 		}
 
 		m_silhouetteIdx = new ArrayList<SilhouetteIndex>();
@@ -522,10 +526,38 @@ public class KValid extends RandomizableClusterer implements
 	 * Enables/Disables the cascade option, i.e: attemp to find
 	 * the best K.
 	 *
-	 * @param maximumK Minimal K value.
+	 * @param cascade Enables/Disables the cascade mode.
 	 */
 	public void setCascade(boolean cascade) {
 		m_cascade = cascade;
+	}
+
+	/**
+	 * Returns the tip text for this property.
+	 * 
+	 * @return tip text for this property suitable for displaying in the
+	 *         explorer/experimenter gui
+	 */
+	public String setShowGraphTipText() {
+		return "Show graph: shows the graph representing the results when in cascade mode!";
+	}
+
+	/**
+	 * Returns the graph option selected.
+	 *
+	 * @return true if the graph mode is enabled, false otherwise.
+	 */
+	public boolean getShowGraph() {
+		return m_showGraph;
+	}
+
+	/**
+	 * Enables/Disables the graph option.
+	 *
+	 * @param showGraph Enables/Disables the graph drawing.
+	 */
+	public void setShowGraph(boolean showGraph) {
+		m_showGraph = showGraph;
 	}
 
 	/**
@@ -564,6 +596,9 @@ public class KValid extends RandomizableClusterer implements
 			result.add("-maxK");
 			result.add("" + getMaximumK());
 		}
+
+		if (m_showGraph)
+			result.add("-show-graph");
 
 		Collections.addAll(result, super.getOptions());
 
@@ -630,6 +665,9 @@ public class KValid extends RandomizableClusterer implements
 				setMaximumK(Integer.parseInt(temp));
 		}
 
+		/* Show graph option. */
+		m_showGraph = Utils.getFlag("show-graph", options);
+
 		super.setOptions(options);
 		Utils.checkForRemainingOptions(options);
 	}
@@ -671,6 +709,19 @@ public class KValid extends RandomizableClusterer implements
 				description.append("\n~~ Best K: " + m_bestK + " ~~");
 				description.append(
 					"\nPlease manually check your dataset to figure out if this is really the best K");
+			
+				/* Show the graph. */
+				ArrayList<Double> dataSet = new ArrayList<Double>();
+				for (int i = 0; i < m_silhouetteIdx.size(); i++)
+					dataSet.add( m_silhouetteIdx.get(i).getGlobalSilhouette() );
+
+				/* Show the graph if needed. */
+				if (m_showGraph == true) {
+					GraphPlotter gp = new GraphPlotter("KValid - Silhouette Index");
+					gp.plot(dataSet, m_minimumK, "Silhouette analysis for KMeans",
+						"for k ranging between " + m_minimumK + " and " + m_maximumK,
+						"k - value", "Silhouette Index");
+				}
 			}
 		}
 		
