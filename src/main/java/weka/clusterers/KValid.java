@@ -58,6 +58,8 @@ import weka.core.WeightedInstancesHandler;
 import weka.filters.Filter;
 import weka.filters.unsupervised.attribute.ReplaceMissingValues;
 
+import weka.clusterers.kvalid.SilhouetteIndex;
+
 /**
  * <!-- globalinfo-start --> KValid: SimpleKMeans with validation.
  * For more information, see<br/>
@@ -117,20 +119,20 @@ public class KValid extends RandomizableClusterer implements
 	/** My instances. */
 	protected Instances m_instances = null;
 
-	/** Minimal k. */
-	protected int m_minimalK = 3;
+	/** Minimum k. */
+	protected int m_minimumK = 3;
 
 	/** Maximum k. */
-	protected int m_maximalK = 10;
+	protected int m_maximumK = 10;
 
 	/** Cascade. */
 	protected boolean m_cascade = false;
 
-	/** Clusters SI. */
-	protected ArrayList<Double> m_clustersSilhouette = new ArrayList<Double>();
+	/** SilhouetteIndex. */
+	protected ArrayList<SilhouetteIndex> m_silhouetteIdx;
 
-	/** Global SI. */
-	protected double m_globalSilhouette = 0.0;
+	/** Best K. */
+	protected int m_bestK = 0;
 
 	/** Default constructor. */
 	public KValid() {
@@ -179,28 +181,84 @@ public class KValid extends RandomizableClusterer implements
 	 */
 	@Override
 	public void buildClusterer(Instances data) throws Exception {
+		int start   = m_numClusters;
+		int end     = m_numClusters;
 		m_instances = data;
-		m_skmeans   = new SimpleKMeans();
 
-		/* Setup the configs. */
-		m_skmeans.setInitializationMethod(new SelectedTag(m_initializationMethod,
-			weka.clusterers.SimpleKMeans.TAGS_SELECTION));
+		if (m_cascade == true) {
+			
+			if (m_minimumK >= m_maximumK || m_minimumK < 2 || m_maximumK < 3)
+				throw new Exception
+					("Wrong minimum/maximum values, minimum should be >= 2 and maximum >= 3");
+			
+			start = m_maximumK;
+			end   = m_minimumK;
+		}
 
-		/* Num clusters. */
-		m_skmeans.setNumClusters(m_numClusters);
-		
-		/* Distance function. */
-		m_skmeans.setDistanceFunction(m_distanceFunction);
-		
-		/* Max iterations. */
-		m_skmeans.setMaxIterations(m_maxInteration);
+		m_silhouetteIdx = new ArrayList<SilhouetteIndex>();
 
-		/* Build clusterer. */
-		m_skmeans.buildClusterer(data);
+		/* Cascade k-Means. */
+		for (int i = start; i <= end; i++) {
 
-		/* Gets the validation, Silhouette or something else. */
-		if (m_validationMethod == SILHOUETTE_INDEX)
-			silhouetteIndex(); 
+			m_skmeans = new SimpleKMeans();
+
+			/* Setup the configs. */
+			m_skmeans.setInitializationMethod(new SelectedTag(m_initializationMethod,
+				weka.clusterers.SimpleKMeans.TAGS_SELECTION));
+
+			/* Set seed. */
+			m_skmeans.setSeed(m_SeedDefault);
+
+			/* Num clusters. */
+			m_skmeans.setNumClusters(i);
+			
+			/* Distance function. */
+			m_skmeans.setDistanceFunction(m_distanceFunction);
+			
+			/* Max iterations. */
+			m_skmeans.setMaxIterations(m_maxInteration);
+
+			/* Build clusterer. */
+			m_skmeans.buildClusterer(data);
+
+			/* Gets the validation, Silhouette or something else. */
+			if (m_validationMethod == SILHOUETTE_INDEX) {
+
+				m_silhouetteIdx.add(new SilhouetteIndex());
+				
+				m_silhouetteIdx.get(i - start).evaluate(m_skmeans, m_skmeans.getClusterCentroids(),
+					m_instances, m_distanceFunction);
+			}
+		}
+
+		/* Gets the 'best' K if cascade enable. */
+		if (m_cascade == true) {
+			double si = 0;
+			
+			if (m_validationMethod == SILHOUETTE_INDEX) {
+				for (int i = 0; i < m_silhouetteIdx.size(); i++) {
+					if (m_silhouetteIdx.get(i).getGlobalSilhouette() > si) {
+						si  = m_silhouetteIdx.get(i).getGlobalSilhouette();
+						m_bestK = i;
+					}
+				}
+			}
+
+			/* Repeats the clustering for the best K. */
+			m_bestK += start;
+			m_skmeans = new SimpleKMeans();
+			
+			/* Initialize and run k-Means again. */
+			m_skmeans.setInitializationMethod(new SelectedTag(m_initializationMethod,
+				weka.clusterers.SimpleKMeans.TAGS_SELECTION));
+			
+			m_skmeans.setSeed(m_SeedDefault);
+			m_skmeans.setNumClusters(m_bestK);
+			m_skmeans.setDistanceFunction(m_distanceFunction);
+			m_skmeans.setMaxIterations(m_maxInteration);
+			m_skmeans.buildClusterer(data);
+			setNumClusters(m_bestK);
+		}
 	}
 
 	/**
@@ -217,141 +275,6 @@ public class KValid extends RandomizableClusterer implements
 			throw new Exception("The clusterer was not build yet!");
 		else
 			return m_skmeans.clusterInstance(instance);
-	}
-
-	/**
-	 * Calculates the Silhouette Index for the given dataset
-	 * in the buildClusterer.
-	 */
-	@SuppressWarnings("unchecked")
-	public void silhouetteIndex() throws Exception
-	{
-		if (m_skmeans == null)
-			throw new Exception("The clusterer was not build yet!");
-
-		Instances centroids = m_skmeans.getClusterCentroids();
-
-		/*
-		 * Attributes each instance to your centroid.
-		 * 
-		 * Note that this is not the right way to do, because there's
-		 * one way to get the instances already classified instead
-		 * of classify again. As long as I do not know how to accomplish
-		 * that, I'll classify again.
-		 */
-		ArrayList<Instance>[] clusteredInstances =
-			(ArrayList<Instance>[]) new ArrayList<?>[centroids.size()];
-
-		/* Initialize. */
-		for (int i = 0; i < centroids.size(); i++)
-			clusteredInstances[i] = new ArrayList<Instance>();
-
-		/* Fills. */
-		for (int i = 0; i < m_instances.size(); i++)
-			clusteredInstances[ m_skmeans.clusterInstance( m_instances.get(i) ) ]
-				.add( m_instances.get(i) );
-
-		/* For each centroid. */
-		for (int i = 0; i < clusteredInstances.length; i++) {
-			double centroidSilhouetteIndex = 0.0;
-
-			/* 
-			 * Calculate the distance between a given point to the others
-			 * within the same centroid.
-			 */
-			for (int j = 0; j < clusteredInstances[i].size(); j++) {
-				double pointSilhouetteIndex = 0.0;
-				double meanDistSameC  = 0.0;
-				double meanDistOtherC = 0.0;
-
-				/* My reference point. */
-				Instance i1 = clusteredInstances[i].get(j);
-
-				/* For each other point, in the same centroid.. */
-				for (int k = 0; k < clusteredInstances[i].size(); k++) {
-					/* Different point. */
-					if (k == j)
-						continue;
-
-					/* Gets the distance between p1 and p2. */
-					Instance i2 = clusteredInstances[i].get(k);
-					meanDistSameC += m_distanceFunction.distance(i1, i2);
-				}
-
-				/* Mean. */
-				meanDistSameC /= (clusteredInstances[i].size() - 1);
-
-				/* Get the nearest cluster to the point j. */
-				double minDistance = Double.MAX_VALUE;
-				int minCentroid = 0;
-
-				for (int k = 0; k < centroids.size(); k++) {
-					/* Other clusters, ;-). */
-					if (k == i)
-						continue;
-
-					/* Distance. */
-					Instance i2 = centroids.get(k);
-					double distance = m_distanceFunction.distance(i1, i2);
-
-					/* Checks if is lower. */
-					if (distance < minDistance) {
-						minDistance = distance;
-						minCentroid = k;
-					}
-				}
-
-				/*
-				 * We already know which cluster is closest, so now we have to go
-				 * through this cluster and get the average distance from all points
-				 * to point p1.
-				 */
-				for (int k = 0; k < clusteredInstances[minCentroid].size(); k++) {
-					/* Gets the distance between p1 and p2. */
-					Instance i2 = clusteredInstances[minCentroid].get(k);
-
-					/* Distance. */
-					meanDistOtherC += m_distanceFunction.distance(i1, i2);
-				}
-
-				/* Mean. */
-				meanDistOtherC /= (clusteredInstances[minCentroid].size() - 1);
-
-				/* Now, we calculate the silhouette index, \o/. */
-				pointSilhouetteIndex = (meanDistOtherC - meanDistSameC) / 
-					Math.max( meanDistSameC, meanDistOtherC );
-
-				/* Sum to the centroid silhouette. */
-				centroidSilhouetteIndex += pointSilhouetteIndex;
-			}
-
-			centroidSilhouetteIndex /= (clusteredInstances[i].size() - 1);
-			m_globalSilhouette += centroidSilhouetteIndex;
-
-			m_clustersSilhouette.add( centroidSilhouetteIndex );
-		}
-
-		m_globalSilhouette /= m_clustersSilhouette.size();
-	}
-
-	/**
-	 * Evaluates a given silhouette index result.
-	 *
-	 * @param si Silhouette-Index.
-	 */
-	public String evalSilhouette(double si) {
-		String eval = "";
-
-		if (si > 0.70)
-			eval = "strong structure!";
-		else if (si >  0.50 && si <= 0.70)
-			eval = "reasonably structure!";
-		else if (si >  0.25 && si <= 0.50)
-			eval = "weak structure!";
-		else if (si <= 0.25)
-			eval = "a non substancial structure was found!";
-
-		return eval;
 	}
 
 	/**
@@ -526,30 +449,26 @@ public class KValid extends RandomizableClusterer implements
 	 * @return tip text for this property suitable for displaying in the
 	 *         explorer/experimenter gui
 	 */
-	public String minimalKTipText() {
-		return "The minimal K value for test when cascade option is enabled";
+	public String minimumKTipText() {
+		return "The minimum K value for test when cascade option is enabled";
 	}
 
 	/**
-	 * Returns the minimal K value when cascade k-means enabled.
+	 * Returns the minimum K value when cascade k-means enabled.
 	 *
-	 * @return the minimal k value for test.
+	 * @return the minimum k value for test.
 	 */
-	public int getMinimalK() {
-		return m_minimalK;
+	public int getMinimumK() {
+		return m_minimumK;
 	}
 
 	/**
-	 * Sets the minimal K value. 
+	 * Sets the minimum K value. 
 	 *
-	 * @param minimalK Minimal K value.
+	 * @param minimumK minimum K value.
 	 */
-	public void setMinimalK(int minimalK) throws Exception { 
-
-		if (minimalK < 1 || minimalK >= m_maximalK)
-			throw new Exception("minimalK should be >= 2 and lesser than maximalK");
-
-		m_minimalK = minimalK;
+	public void setMinimumK(int minimumK) throws Exception { 
+		m_minimumK = minimumK;
 	}
 
 	/**
@@ -558,30 +477,26 @@ public class KValid extends RandomizableClusterer implements
 	 * @return tip text for this property suitable for displaying in the
 	 *         explorer/experimenter gui
 	 */
-	public String maximalKTipText() {
-		return "The maximal K value for test when cascade option is enabled";
+	public String maximumKTipText() {
+		return "The maximum K value for test when cascade option is enabled";
 	}
 
 	/**
-	 * Returns the maximal K value when cascade k-means enabled.
+	 * Returns the maximum K value when cascade k-means enabled.
 	 *
-	 * @return the maximal k value for test.
+	 * @return the maximum k value for test.
 	 */
-	public int getMaximalK() {
-		return m_maximalK;
+	public int getMaximumK() {
+		return m_maximumK;
 	}
 
 	/**
-	 * Sets the maximal K value. 
+	 * Sets the maximum K value. 
 	 *
-	 * @param maximalK Minimal K value.
+	 * @param maximumK minimum K value.
 	 */
-	public void setMaximalK(int maximalK) throws Exception { 
-
-		if (maximalK < 1 || maximalK <= m_minimalK)
-			throw new Exception("maximalK should be >= 2 and greater than minimalK");
-
-		m_maximalK = maximalK;
+	public void setMaximumK(int maximumK) throws Exception {
+		m_maximumK = maximumK;
 	}
 
 	/**
@@ -607,7 +522,7 @@ public class KValid extends RandomizableClusterer implements
 	 * Enables/Disables the cascade option, i.e: attemp to find
 	 * the best K.
 	 *
-	 * @param maximalK Minimal K value.
+	 * @param maximumK Minimal K value.
 	 */
 	public void setCascade(boolean cascade) {
 		m_cascade = cascade;
@@ -644,10 +559,10 @@ public class KValid extends RandomizableClusterer implements
 			result.add("-cascade");
 
 			result.add("-minK");
-			result.add("" + getMinimalK());
+			result.add("" + getMinimumK());
 
 			result.add("-maxK");
-			result.add("" + getMaximalK());
+			result.add("" + getMaximumK());
 		}
 
 		Collections.addAll(result, super.getOptions());
@@ -708,11 +623,11 @@ public class KValid extends RandomizableClusterer implements
 			
 			temp = Utils.getOption("minK", options);
 			if (temp.length() > 0)
-				setMinimalK(Integer.parseInt(temp));
+				setMinimumK(Integer.parseInt(temp));
 
 			temp = Utils.getOption("maxK", options);
 			if (temp.length() > 0)
-				setMaximalK(Integer.parseInt(temp));
+				setMaximumK(Integer.parseInt(temp));
 		}
 
 		super.setOptions(options);
@@ -734,21 +649,29 @@ public class KValid extends RandomizableClusterer implements
 
 		description.append("=== Clustering validation, using: " +
 			((m_validationMethod == SILHOUETTE_INDEX) ? "Silhouette Index"
-			: "Davies-Bouldin Index") + " ===\n");
+			: "Davies-Bouldin Index") + " ===");
 
 		if (m_validationMethod == SILHOUETTE_INDEX) {
+			int start   = m_numClusters;
+			int end     = m_numClusters;
 
-			description.append("\n\n");
-
-			/* Clusters. */
-			for (int i = 0; i < m_clustersSilhouette.size(); i++) {
-				double si = m_clustersSilhouette.get(i);
-				description.append("Cluster " + i + ": " + String.format(Locale.US, "%.4f", si)
-					+ ", veredict: " + evalSilhouette(si) + "\n");
+			if (m_cascade == true) {
+				start = m_minimumK;
+				end   = m_maximumK;
 			}
 
-			description.append("\n\nMean: " + String.format(Locale.US, "%.4f", m_globalSilhouette)
-				+ ", veredict: " + evalSilhouette(m_globalSilhouette));
+			description.append("\n");
+
+			for (int i = start; i <= end; i++) {
+				description.append("\nFor k = " + i + "\n");
+				description.append( m_silhouetteIdx.get(i - start).toString() + "\n");
+			}
+
+			if (m_cascade == true) {
+				description.append("\n~~ Best K: " + m_bestK + " ~~");
+				description.append(
+					"\nPlease manually check your dataset to figure out if this is really the best K");
+			}
 		}
 		
 		description.append("\n\n");
