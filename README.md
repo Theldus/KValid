@@ -15,7 +15,7 @@ KValid is a simple clustering evaluation package for [WEKA](http://www.cs.waikat
 It uses the SimpleKMeans algorithm as a backend to cluster the instances and evaluates
 the clusterer using some algorithms, currently Silhouette-Index and Elbow.
 
-### Funcionalities
+### Functionalities
 
 KValid uses Silhouette-Index and Elbow to validate the SimpleKMeans algorithm. Besides calculating
 the SI and SSE, the package tell which is the best K and allows plot the graph into the screen and
